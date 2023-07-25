@@ -1,0 +1,338 @@
+---
+title: "Advancement Office Project"
+author: "Peike Wang"
+date: "2023-03-21"
+output: pdf_document
+---
+
+```{r}
+library(readr)
+library(data.table)
+library(tidyverse)
+library(dplyr)
+library(glmnet)
+library(MLmetrics)
+```
+
+
+# EDA
+
+```{r}
+adv <- fread("early_engagement_interest_data.csv")
+```
+
+
+```{r}
+adv2 <- fread("stat_4911_early_engagement_expanded.csv")
+```
+
+```{r}
+adv2$AMT_DONOR_LT_TOTAL <- ifelse(adv2$AMT_DONOR_LT_TOTAL==0,0,1)
+```
+
+```{r}
+# country, State, OH
+
+adv2$CAT_ADDRESS_COUNTRY <- ifelse(adv2$CAT_ADDRESS_COUNTRY=="United States",1,0)
+adv2$CAT_ADDRESS_STATE <- ifelse(adv2$CAT_ADDRESS_STATE=="OH",1,0)
+adv2$CAT_ADDRESS_COUNTY_OH <- ifelse(adv2$CAT_ADDRESS_COUNTY_OH=="Franklin",1,0)
+```
+
+```{r}
+adv2$ID_SPOUSECONSTITUENTLOOKUPID <- ifelse(adv2$ID_SPOUSECONSTITUENTLOOKUPID=="null",0,1)
+```
+
+```{r}
+adv2$is_married <- if_else(adv2$CAT_CONST_MARITAL_CLEAN == "Married", TRUE, FALSE)
+```
+
+```{r}
+adv2$Engaged_YN <- if_else(adv2$Engaged_YN == 1, TRUE, FALSE)
+```
+
+```{r}
+adv2$HAS_CONTACT <- ifelse(adv2$HAS_PHONE=="FALSE"&adv2$HAS_PHONE_CELL=="FALSE"&adv2$HAS_EMAILADDRESS=="FALSE",0,1)
+```
+
+```{r}
+names(adv2)[!names(adv2)%in%names(adv)]
+```
+
+```{r}
+adv2$AMT_DONOR_LT_TOTAL <- ifelse(adv2$AMT_DONOR_LT_TOTAL==0,0,1)
+```
+
+```{r}
+adv2$N_EVENTS <- ifelse(adv2$N_EVENTS==0,0,1)
+```
+
+```{r}
+adv2$IS_OSUVOLUNTEER_EVER <- ifelse(adv2$IS_OSUVOLUNTEER_EVER=="FALSE",0,1)
+```
+
+```{r}
+adv2$Engaged_YN <- ifelse(adv2$AMT_DONOR_LT_TOTAL==1 & adv2$N_EVENTS==0 & adv2$IS_OSUVOLUNTEER_EVER==0,1,ifelse(adv2$AMT_DONOR_LT_TOTAL==0 & adv2$N_EVENTS==1 & adv2$IS_OSUVOLUNTEER_EVER==0,2,ifelse(adv2$AMT_DONOR_LT_TOTAL==0 & adv2$N_EVENTS==0 & adv2$IS_OSUVOLUNTEER_EVER==1,3,ifelse(adv2$AMT_DONOR_LT_TOTAL==1 & adv2$N_EVENTS==1 & adv2$IS_OSUVOLUNTEER_EVER==0,4,ifelse(adv2$AMT_DONOR_LT_TOTAL==1 & adv2$N_EVENTS==0 & adv2$IS_OSUVOLUNTEER_EVER==1,5,ifelse(adv2$AMT_DONOR_LT_TOTAL==0 & adv2$N_EVENTS==1 & adv2$IS_OSUVOLUNTEER_EVER==1,6,ifelse(adv2$AMT_DONOR_LT_TOTAL==1 & adv2$N_EVENTS==1 & adv2$IS_OSUVOLUNTEER_EVER==1,7,0)))))))
+```
+
+```{r}
+length(which(adv2$Engaged_YN==1 & adv2$AMT_DONOR_LT_TOTAL==0 & adv2$N_EVENTS==0 & adv2$IS_OSUVOLUNTEER_EVER==0))
+```
+
+
+```{r}
+table(adv2$IS_OSUALUMSPOUSE, adv2$Engaged_YN)
+
+mosaicplot(~ adv2$Engaged_YN + adv2$IS_OSUALUMSPOUSE)
+```
+
+
+# Exploration
+
+```{r}
+# Age
+
+ggplot(adv, aes(x=VAL_CONST_AGE_CLEAN, y=Engaged_YN)) + geom_point() +
+  stat_summary(aes(y = Engaged_YN,group=1), fun.y=mean, colour="red", geom="line",group=1)
+
+barplot(table(adv$VAL_CONST_AGE_CLEAN))
+```
+
+
+```{r}
+mosaicplot(~ adv$Engaged_YN + adv$CAT_ADDRESS_COUNTRY)
+mosaicplot(~ adv$Engaged_YN + adv$CAT_ADDRESS_STATE)
+mosaicplot(~ adv$Engaged_YN + adv$CAT_ADDRESS_COUNTY_OH)
+
+table(adv$CAT_ADDRESS_COUNTRY, adv$Engaged_YN)
+```
+
+
+```{r}
+# Number of Email
+
+ggplot(adv, aes(x=N_EMAILADDRESS, y=Engaged_YN)) + geom_point() +
+  stat_summary(aes(y = Engaged_YN,group=1), fun.y=mean, colour="red", geom="line",group=1)
+
+barplot(table(adv$N_EMAILADDRESS))
+
+mosaicplot(~ adv$Engaged_YN + adv$HAS_EMAILADDRESS_2PLUS)
+```
+
+
+```{r}
+# Activity
+
+table(adv$IS_OSUEDUINVL_OSUACTIVITY, adv$Engaged_YN)
+
+mosaicplot(~ adv$Engaged_YN + adv$IS_OSUEDUINVL_OSUACTIVITY, xlab="Engaged", ylab="Is_Activity", main="Is_Activity")
+```
+
+```{r}
+# leadership
+
+table(adv$IS_EDUINVL_STUDENTLEADER, adv$Engaged_YN)
+
+mosaicplot(~ adv$Engaged_YN + adv$IS_EDUINVL_STUDENTLEADER, xlab="Engaged", ylab="Is_StudentLeader", main="Is_StudentLeader")
+```
+
+```{r}
+# clubs
+
+table(adv$IS_EDUINVL_ANYCLUBS, adv$Engaged_YN)
+
+mosaicplot(~ adv$Engaged_YN + adv$IS_EDUINVL_ANYCLUBS)
+```
+
+```{r}
+# student award
+
+table(adv$IS_EDUINVL_STUDENTAWARD, adv$Engaged_YN)
+
+mosaicplot(~ adv$Engaged_YN + adv$IS_EDUINVL_STUDENTAWARD)
+```
+
+```{r}
+# Law
+
+table(adv$IS_DEGREE_COLLEGECDO_LAW, adv$Engaged_YN)
+
+mosaicplot(~ adv$Engaged_YN + adv$IS_DEGREE_COLLEGECDO_LAW, xlab="Engaged", ylab="Is_Law", main="Is_Law")
+```
+
+```{r}
+# John Glenn College of Public Affairs
+
+table(adv$IS_DEGREE_COLLEGECDO_JGSPA, adv$Engaged_YN)
+
+mosaicplot(~ adv$Engaged_YN + adv$IS_DEGREE_COLLEGECDO_JGSPA)
+```
+
+```{r}
+# Club
+
+table(adv$IS_EDUINVL_ANYCLUBS, adv$Engaged_YN)
+
+mosaicplot(~ adv$Engaged_YN + adv$IS_EDUINVL_ANYCLUBS)
+```
+
+
+```{r}
+check_data <- adv[,c("Engaged_YN", "N_EMAILADDRESS", "IS_EDUINVL_ANYCLUBS", "N_EDUINVL_STUDENTLEADER", "IS_OSUEDUINVL_OSUACTIVITY", "N_EDUINVL_AWARDHONORSTYPE", "IS_DEGREE_COLLEGECDO_LAW", "IS_DEGREE_COLLEGECDO_JGSPA", "IS_DEGREE_COLLEGECDO_PUBHL", "is_married")]
+```
+
+```{r}
+final_data <- adv2[,c("Engaged_YN", "N_EMAILADDRESS", "IS_EDUINVL_ANYCLUBS", "N_EDUINVL_STUDENTLEADER", "IS_OSUEDUINVL_OSUACTIVITY", "N_EDUINVL_AWARDHONORSTYPE", "IS_DEGREE_COLLEGECDO_LAW", "IS_DEGREE_COLLEGECDO_JGSPA", "IS_DEGREE_COLLEGECDO_PUBHL", "is_married")]
+```
+
+```{r}
+adv$VAL_CONST_AGE_CLEAN <- as.numeric(adv$VAL_CONST_AGE_CLEAN)
+```
+
+
+
+# Logistic Regression
+
+```{r}
+# Check
+
+set.seed(491)
+
+sample <- sample(c(TRUE, FALSE), nrow(check_data), replace=TRUE, prob=c(0.7, 0.3))
+testing_set <- check_data[sample, ]
+training_set <- check_data[!sample, ]
+
+glm_model <- glm(Engaged_YN~., data = training_set)
+
+preds <- predict(glm_model, testing_set)
+preds <- if_else(preds>= 0.5, 1, 0)
+
+count = nrow(testing_set)
+TP = length(which(testing_set$Engaged_YN == preds & preds == 1))
+FP = length(which(preds == 1 & testing_set$Engaged_YN != preds))
+FN = length(which(preds == 0 & testing_set$Engaged_YN != preds))
+2*TP/ (2*TP + FP + FN)
+
+f1 <- F1_Score(y_pred = preds, y_true = testing_set$Engaged_YN, positive = "1")
+f1
+```
+
+```{r}
+# Check2
+
+set.seed(491)
+
+sample <- sample(c(TRUE, FALSE), nrow(adv2), replace=TRUE, prob=c(0.7, 0.3))
+testing_set <- adv2[sample, ]
+training_set <- adv2[!sample, ]
+
+glm_model <- glm(as.numeric(Engaged_YN) ~ N_EMAILADDRESS + IS_EDUINVL_ANYCLUBS + N_EDUINVL_STUDENTLEADER
++ IS_OSUEDUINVL_OSUACTIVITY
++ N_EDUINVL_AWARDHONORSTYPE
++ IS_DEGREE_COLLEGECDO_LAW
++ IS_DEGREE_COLLEGECDO_JGSPA
++ IS_DEGREE_COLLEGECDO_PUBHL
++ is_married
+
+,data = training_set)
+
+preds <- predict(glm_model, testing_set)
+preds <- if_else(preds>= 0.5, 1, 0)
+
+count = nrow(testing_set)
+TP = length(which(testing_set$Engaged_YN == preds & preds == 1))
+FP = length(which(preds == 1 & testing_set$Engaged_YN != preds))
+FN = length(which(preds == 0 & testing_set$Engaged_YN != preds))
+2*TP/ (2*TP + FP + FN)
+
+f1 <- F1_Score(y_pred = preds, y_true = testing_set$Engaged_YN, positive = "1")
+f1
+```
+
+```{r}
+# Check3
+
+set.seed(491)
+
+sample <- sample(c(TRUE, FALSE), nrow(adv2), replace=TRUE, prob=c(0.7, 0.3))
+testing_set <- adv2[sample, ]
+training_set <- adv2[!sample, ]
+
+glm_model <- glm(as.numeric(Engaged_YN) ~ N_EMAILADDRESS + IS_EDUINVL_ANYCLUBS + N_EDUINVL_STUDENTLEADER
++ IS_OSUEDUINVL_OSUACTIVITY
++ N_EDUINVL_AWARDHONORSTYPE
++ IS_DEGREE_COLLEGECDO_LAW
++ IS_DEGREE_COLLEGECDO_JGSPA
++ IS_DEGREE_COLLEGECDO_PUBHL
++ is_married
+
+,data = training_set)
+
+preds <- predict(glm_model, testing_set)
+preds <- if_else(preds>= 0.5, 1, 0)
+
+count = nrow(testing_set)
+TP = length(which(testing_set$Engaged_YN == preds & preds == 1))
+FP = length(which(preds == 1 & testing_set$Engaged_YN != preds))
+FN = length(which(preds == 0 & testing_set$Engaged_YN != preds))
+2*TP/ (2*TP + FP + FN)
+
+f1 <- F1_Score(y_pred = preds, y_true = testing_set$Engaged_YN, positive = "1")
+f1
+```
+
+```{r}
+# Final
+
+set.seed(491)
+
+sample <- sample(c(TRUE, FALSE), nrow(final_data), replace=TRUE, prob=c(0.7, 0.3))
+training_set <- final_data[sample, ]
+testing_set <- final_data[!sample, ]
+
+glm_model <- glm(Engaged_YN~., data = training_set)
+
+preds <- predict(glm_model, testing_set)
+preds <- if_else(preds>= 0.5, 1, 0)
+
+count = nrow(testing_set)
+TP = length(which(testing_set$Engaged_YN == preds & preds == 1))
+FP = length(which(preds == 1 & testing_set$Engaged_YN != preds))
+FN = length(which(preds == 0 & testing_set$Engaged_YN != preds))
+2*TP/ (2*TP + FP + FN)
+
+f1 <- F1_Score(y_pred = preds, y_true = testing_set$Engaged_YN, positive = "1")
+f1
+```
+
+
+
+# Random Forest
+
+```{r}
+library(randomForest)
+```
+
+```{r}
+final_data$Engaged_YN <- as.factor(final_data$Engaged_YN)
+```
+
+```{r}
+set.seed(491)
+
+ind <- sample(2, nrow(final_data), replace=TRUE, prob=c(0.7, 0.3))
+train <- final_data[ind==1,]
+test <- final_data[ind==2,]
+y_test <- test$Engaged_YN
+  
+rf = randomForest(Engaged_YN~., importance = TRUE, mtry=5, data=train)
+pred_rf = predict(rf, test)
+
+f1 <- F1_Score(y_pred = pred_rf, y_true = y_test, positive = "1")
+f1
+```
+
+```{r}
+write.csv(final_data, "final_data2.csv")
+```
+
+
